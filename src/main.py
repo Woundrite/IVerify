@@ -6,9 +6,13 @@ import json
 from xlsx2html import xlsx2html
 import asyncio
 from pyppeteer import launch
+import platform
 
 async def generate_pdf(url, pdf_path):
-	browser = await launch(headless=True, executablePath=os.getcwd()+'/chrome-win/chrome.exe')
+	bpth = os.getcwd()+'/chrome-win/chrome.exe'
+	if platform.system() != "Windows":
+		bpth = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+	browser = await launch(headless=True, executablePath=bpth)
 	page = await browser.newPage()
 	
 	await page.goto(url)
@@ -17,12 +21,13 @@ async def generate_pdf(url, pdf_path):
 	
 	await browser.close()
 
-def to_pdf(file_path):
+def to_pdf(file_path, in_root):
 	print(f"Generating PDF for of {file_path}...")
-	path =  os.getcwd().replace('\\','/') + '/'
 	file_path = file_path.replace('\\', '/')
-	xlsx2html(path+file_path, 'file.html')
-	asyncio.run(generate_pdf(f'file:///{path+'file.html'}', path+file_path.replace('.xlsx', '.pdf')))
+	os.path.relpath(file_path, os.getcwd()) 
+	print(file_path)
+	xlsx2html(file_path, 'file.html')
+	asyncio.run(generate_pdf(f'file:///{os.getcwd()+'/file.html'}', file_path.replace('.xlsx', '.pdf')))
 
 def handle_excel_write(file_path, personal_data):
 	# Create a workbook and add a worksheet.
@@ -162,54 +167,54 @@ def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file,
 	for root, dirs, files in os.walk(out_root):
 		for file in files:
 			if file.endswith(".xlsx"):
-				to_pdf(os.path.join(root, file))
+				to_pdf(os.path.join(root, file), in_root)
 	
 	combine_xlsx(out_root, data)
 
 def combine_xlsx(out_root, data):
-	print("Combining xlsx files...")
-	# reads all the xlsx files in the directory and combines all the data into one xlsx file and saves it, uses xlsx writer
-	# seperate tables for each uan id
-	# Create a workbook and add a worksheet.
-	workbook = xlsxwriter.Workbook(os.path.join(out_root, "Excel Reports.xlsx"))
-	worksheet = workbook.add_worksheet()
-	# header's format.
-	header_format = workbook.add_format({'bold': True, 'bg_color': '#95b3d7','align': 'center', 'valign': 'vcenter', 'border': 1})
-	# add border to the cells.
-	cell_format = workbook.add_format({'border': 1, 'align': 'center', 'valign': 'vcenter'})
-	row = 0
-	col = 0
-	for group in data:
-		
-		worksheet.write(row, 0, 'UAN NUMBER', header_format)
-		worksheet.write(row, 1, 'MEMBER ID', header_format)
-		worksheet.write(row, 2, 'ESTABLISHMENT DETAILS', header_format)
-		worksheet.write(row, 3, 'NAME', header_format)
-		worksheet.write(row, 4, 'FATHER OR HUSBAND \n NAME', header_format)
-		worksheet.write(row, 5, 'DATE OF JOIN', header_format)
-		worksheet.write(row, 6, 'DATE OF EXIT PF', header_format)
-		for r in group:
-			for col, value in enumerate(r):
-				worksheet.write(row + 1, col, value, cell_format)
-			row += 1
-			col = 0
-	worksheet.autofit()
+    print("Combining xlsx files...")
+    # reads all the xlsx files in the directory and combines all the data into one xlsx file and saves it, uses xlsx writer
+    # seperate tables for each uan id
+    # Create a workbook and add a worksheet.
+    workbook = xlsxwriter.Workbook(os.path.join(out_root, "Excel Reports.xlsx"))
+    worksheet = workbook.add_worksheet()
+    # header's format.
+    header_format = workbook.add_format({'bold': True, 'bg_color': '#95b3d7','align': 'center', 'valign': 'vcenter', 'border': 1})
+    # add border to the cells.
+    cell_format = workbook.add_format({'border': 1, 'align': 'center', 'valign': 'vcenter'})
+    row = 0
+    col = 0
+    for group in data:
+        
+        worksheet.write(row, 0, 'UAN NUMBER', header_format)
+        worksheet.write(row, 1, 'MEMBER ID', header_format)
+        worksheet.write(row, 2, 'ESTABLISHMENT DETAILS', header_format)
+        worksheet.write(row, 3, 'NAME', header_format)
+        worksheet.write(row, 4, 'FATHER OR HUSBAND \n NAME', header_format)
+        worksheet.write(row, 5, 'DATE OF JOIN', header_format)
+        worksheet.write(row, 6, 'DATE OF EXIT PF', header_format)
+        for r in group:
+            for col, value in enumerate(r):
+                worksheet.write(row + 1, col, value, cell_format)
+            row += 1
+            col = 0
+    worksheet.autofit()
 
-	workbook.close()
-	os.remove("file.html")
-	print("Excel Reports.xlsx has been created.")
+    workbook.close()
+    os.remove("file.html")
+    print("Excel Reports.xlsx has been created.")
 
 if __name__ == "__main__":
-	# company_name_map_file = "sample/CompData.xlsx"
-	# uan_id_compiled_file = "sample/UAN.xlsx"
-	# uan_name_compiled_file = "sample/UANFName.xlsx"
-	# in_root = "sample/in"
-	# out_root = "sample/outs"
-	company_name_map_file = input("Enter the path to the Company name map file: ")
-	uan_id_compiled_file = input("Enter the path to the UAN ID compiled file: ")
-	uan_name_compiled_file = input("Enter the path to the UAN Name compiled file: ")
-	in_root = input("Enter the base directory path: ")
-	out_root = input("Enter the out directory path: ")
+	company_name_map_file = "/Users/orm/IVerify/src/sample/CompData.xlsx"
+	uan_id_compiled_file = "/Users/orm/IVerify/src/sample/UAN.xlsx"
+	uan_name_compiled_file = "/Users/orm/IVerify/src/sample/UANFName.xlsx"
+	in_root = "/Users/orm/IVerify/src/sample/in"
+	out_root = "/Users/orm/Desktop/demo"
+	# company_name_map_file = input("Enter the path to the Company name map file: ")
+	# uan_id_compiled_file = input("Enter the path to the UAN ID compiled file: ")
+	# uan_name_compiled_file = input("Enter the path to the UAN Name compiled file: ")
+	# in_root = input("Enter the base directory path: ")
+	# out_root = input("Enter the out directory path: ")
 	compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file, in_root, out_root)
 	
 	print("Completed.")

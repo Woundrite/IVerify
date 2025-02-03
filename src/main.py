@@ -7,13 +7,18 @@ import asyncio
 from pyppeteer import launch
 import platform
 from xlsx2html import xlsx2html
-from pyhtml2pdf import converter
 import sys
+from tkinter import messagebox
 
 std_out = sys.stdout
 file_out = open("log.txt", "w")
 sys.stdout = file_out
-
+def HandleError(e):
+	messagebox.showerror("Error", f"An error occurred: {str(e)}")
+	print(e)
+	sys.stdout = std_out
+	file_out.close()
+	sys.exit(1)
 async def generate_pdf(url, pdf_path):
 	try:
 		bpth = os.getcwd()+'/chrome-win/chrome.exe'
@@ -106,15 +111,21 @@ def handle_input(file_path, uan, root, uan_name_map, company_names_map):
 			FName = name.get("FName", "").upper()
 			Name = name.get("Name", "").upper()
 		else:
+			HandleError(f"No exit date for UAN {uan}")
 			FName = ""
 			Name = name
 
-		est = company_names_map.get(row["EstID"], row["EstID"])
-		
+		# est = company_names_map.get(row["EstID"], row["EstID"])
+		try:
+			est = company_names_map[row["EstID"]]
+		except KeyError:
+			HandleError(f"No company name for EstID {row['EstID']}")
+			est = row["EstID"]
 		# print(output)
 
 		if row["EPFDOE"].strip() == "":
 			output.append([str(uan), row['MemID'], est, Name, FName, dt.datetime.strptime(row["EPFDOJ"], '%Y-%m-%d'), ""])
+			
 		else:
 			output.append([str(uan), row['MemID'], est, Name, FName, dt.datetime.strptime(row["EPFDOJ"], '%Y-%m-%d'), dt.datetime.strptime(row["EPFDOE"], '%Y-%m-%d')])
 	output = sorted(output, key=lambda x: x[5])[::-1]

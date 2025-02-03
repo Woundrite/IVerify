@@ -3,23 +3,34 @@ import datetime as dt
 import os
 import xlsxwriter
 import json
-from xlsx2html import xlsx2html
 import asyncio
 from pyppeteer import launch
 import platform
+from xlsx2html import xlsx2html
+from pyhtml2pdf import converter
+import sys
+
+std_out = sys.stdout
+file_out = open("log.txt", "w")
+sys.stdout = file_out
 
 async def generate_pdf(url, pdf_path):
-	bpth = os.getcwd()+'/chrome-win/chrome.exe'
-	if platform.system() != "Windows":
-		bpth = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-	browser = await launch(headless=True, executablePath=bpth)
-	page = await browser.newPage()
-	
-	await page.goto(url)
-	
-	await page.pdf({'path': pdf_path, 'format': 'A4', 'printBackground': True})
-	
-	await browser.close()
+	try:
+		bpth = os.getcwd()+'/chrome-win/chrome.exe'
+		print(bpth)
+		if platform.system() != "Windows":
+			bpth = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+		browser = await launch(headless=True, executablePath=bpth, options={'args': ['--no-sandbox']})
+		page = await browser.newPage()
+		
+		await page.goto(url)
+		
+		await page.pdf({'path': pdf_path, 'format': 'A4', 'printBackground': True})
+	except Exception as e:
+		print(f"Error generating PDF: {e}")
+	finally: 	
+		await browser.close()
+	# converter.convert(f'{url}', f'{pdf_path}')
 
 def to_pdf(file_path, in_root):
 	print(f"Generating PDF for of {file_path}...")
@@ -54,7 +65,7 @@ def handle_excel_write(file_path, personal_data):
 				if type(item) == str:
 					worksheet.write(row + 1, col, item, cell_format)
 				else:
-					worksheet.write(row + 1, col, item.strftime('%d-%b-%Y'), cell_format)
+					worksheet.write(row + 1, col, item.strftime('%Y-%m-%d'), cell_format)
 			else:
 				worksheet.write(row + 1, col, item, cell_format)
 		last_row += 1
@@ -103,9 +114,9 @@ def handle_input(file_path, uan, root, uan_name_map, company_names_map):
 		# print(output)
 
 		if row["EPFDOE"].strip() == "":
-			output.append([str(uan), row['MemID'], est, Name, FName, dt.datetime.strptime(row["EPFDOJ"], '%d-%b-%Y'), ""])
+			output.append([str(uan), row['MemID'], est, Name, FName, dt.datetime.strptime(row["EPFDOJ"], '%Y-%m-%d'), ""])
 		else:
-			output.append([str(uan), row['MemID'], est, Name, FName, dt.datetime.strptime(row["EPFDOJ"], '%d-%b-%Y'), dt.datetime.strptime(row["EPFDOE"], '%d-%b-%Y')])
+			output.append([str(uan), row['MemID'], est, Name, FName, dt.datetime.strptime(row["EPFDOJ"], '%Y-%m-%d'), dt.datetime.strptime(row["EPFDOE"], '%Y-%m-%d')])
 	output = sorted(output, key=lambda x: x[5])[::-1]
 	handle_excel_write(os.path.join(root, f"{uan}.xlsx"), output)
 	workbook.close()
@@ -125,7 +136,7 @@ def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file,
 							values_only=True):
 		company_names_map.update({row[0]:  row[1]})
 
-	print(json.dumps(company_names_map, indent=2))
+	# print(json.dumps(company_names_map, indent=2))
 	company_name_workbook.close()
 
 
@@ -137,18 +148,19 @@ def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file,
 							max_col=1,
 							values_only=True):
 		uan_id_map.append(row[0])
-	print(json.dumps(uan_id_map, indent=2))
+	# print(json.dumps(uan_id_map, indent=2))
 	uan_id_workbook.close()
 
 	uan_name_workbook = load_workbook(filename=uan_name_compiled_file)
 	uan_name_sheet = uan_name_workbook.active
 	uan_name_map = {}
 	for row in uan_name_sheet.iter_rows(min_row=0,
-							min_col=2,
-							max_col=4,
+							min_col=0,
+							max_col=3,
 							values_only=True):
+		print(row)
 		uan_name_map.update({str(row[0]): {'Name': row[1], 'FName': row[2]}})
-	print(json.dumps(uan_name_map, indent=2))
+	# print(json.dumps(uan_name_map, indent=2))
 	uan_name_workbook.close()
 
 
@@ -172,44 +184,44 @@ def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file,
 	combine_xlsx(out_root, data)
 
 def combine_xlsx(out_root, data):
-    print("Combining xlsx files...")
-    # reads all the xlsx files in the directory and combines all the data into one xlsx file and saves it, uses xlsx writer
-    # seperate tables for each uan id
-    # Create a workbook and add a worksheet.
-    workbook = xlsxwriter.Workbook(os.path.join(out_root, "Excel Reports.xlsx"))
-    worksheet = workbook.add_worksheet()
-    # header's format.
-    header_format = workbook.add_format({'bold': True, 'bg_color': '#95b3d7','align': 'center', 'valign': 'vcenter', 'border': 1})
-    # add border to the cells.
-    cell_format = workbook.add_format({'border': 1, 'align': 'center', 'valign': 'vcenter'})
-    row = 0
-    col = 0
-    for group in data:
-        
-        worksheet.write(row, 0, 'UAN NUMBER', header_format)
-        worksheet.write(row, 1, 'MEMBER ID', header_format)
-        worksheet.write(row, 2, 'ESTABLISHMENT DETAILS', header_format)
-        worksheet.write(row, 3, 'NAME', header_format)
-        worksheet.write(row, 4, 'FATHER OR HUSBAND \n NAME', header_format)
-        worksheet.write(row, 5, 'DATE OF JOIN', header_format)
-        worksheet.write(row, 6, 'DATE OF EXIT PF', header_format)
-        for r in group:
-            for col, value in enumerate(r):
-                worksheet.write(row + 1, col, value, cell_format)
-            row += 1
-            col = 0
-    worksheet.autofit()
+	print("Combining xlsx files...")
+	# reads all the xlsx files in the directory and combines all the data into one xlsx file and saves it, uses xlsx writer
+	# seperate tables for each uan id
+	# Create a workbook and add a worksheet.
+	workbook = xlsxwriter.Workbook(os.path.join(out_root, "Excel Reports.xlsx"))
+	worksheet = workbook.add_worksheet()
+	# header's format.
+	header_format = workbook.add_format({'bold': True, 'bg_color': '#95b3d7','align': 'center', 'valign': 'vcenter', 'border': 1})
+	# add border to the cells.
+	cell_format = workbook.add_format({'border': 1, 'align': 'center', 'valign': 'vcenter'})
+	row = 0
+	col = 0
+	for group in data:
+		
+		worksheet.write(row, 0, 'UAN NUMBER', header_format)
+		worksheet.write(row, 1, 'MEMBER ID', header_format)
+		worksheet.write(row, 2, 'ESTABLISHMENT DETAILS', header_format)
+		worksheet.write(row, 3, 'NAME', header_format)
+		worksheet.write(row, 4, 'FATHER OR HUSBAND \n NAME', header_format)
+		worksheet.write(row, 5, 'DATE OF JOIN', header_format)
+		worksheet.write(row, 6, 'DATE OF EXIT PF', header_format)
+		for r in group:
+			for col, value in enumerate(r):
+				worksheet.write(row + 1, col, value, cell_format)
+			row += 1
+			col = 0
+	worksheet.autofit()
 
-    workbook.close()
-    os.remove("file.html")
-    print("Excel Reports.xlsx has been created.")
+	workbook.close()
+	os.remove("file.html")
+	print("Excel Reports.xlsx has been created.")
 
 if __name__ == "__main__":
-	company_name_map_file = "/Users/orm/IVerify/src/sample/CompData.xlsx"
-	uan_id_compiled_file = "/Users/orm/IVerify/src/sample/UAN.xlsx"
-	uan_name_compiled_file = "/Users/orm/IVerify/src/sample/UANFName.xlsx"
-	in_root = "/Users/orm/IVerify/src/sample/in"
-	out_root = "/Users/orm/Desktop/demo"
+	company_name_map_file = "C:/Users/ndben/Desktop/Nikhil/Freelancing/IVerify/src/Tests/Data Base for test new deleted.xlsx"
+	uan_id_compiled_file = "C:/Users/ndben/Desktop/Nikhil/Freelancing/IVerify/src/Tests/Uan and candidate.xlsx"
+	uan_name_compiled_file = "C:/Users/ndben/Desktop/Nikhil/Freelancing/IVerify/src/Tests/name and father name.xlsx"
+	in_root = "C:/Users/ndben/Desktop/Nikhil/Freelancing/IVerify/src/Tests/Website Data/Website Data"
+	out_root = "C:/Users/ndben/Desktop/Nikhil/Freelancing/IVerify/src/Tests/Website Data/Out"
 	# company_name_map_file = input("Enter the path to the Company name map file: ")
 	# uan_id_compiled_file = input("Enter the path to the UAN ID compiled file: ")
 	# uan_name_compiled_file = input("Enter the path to the UAN Name compiled file: ")

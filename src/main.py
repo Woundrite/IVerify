@@ -19,6 +19,7 @@ def HandleError(e):
 	sys.stdout = std_out
 	file_out.close()
 	sys.exit(1)
+	
 async def generate_pdf(url, pdf_path):
 	try:
 		bpth = os.getcwd()+'/chrome-win/chrome.exe'

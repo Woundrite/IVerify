@@ -70,8 +70,8 @@ heading.pack(pady=30)
 # File selection fields
 fields = [
     ("Select the Company Data File:", browse_file),
-    ("Select the UAN Candidate File:", browse_file),
-    ("Select the Website Data File:", browse_file),
+    ("Select the UAN Client File:", browse_file),
+    ("Select the Candidate File:", browse_file),
     ("Select the Input Folder:", browse_folder),
     ("Select the Output Folder:", browse_folder)
 ]

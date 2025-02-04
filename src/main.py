@@ -9,6 +9,7 @@ import platform
 from xlsx2html import xlsx2html
 import sys
 from tkinter import messagebox
+import shutil
 
 std_out = sys.stdout
 file_out = open("log.txt", "w")
@@ -44,6 +45,27 @@ def to_pdf(file_path, in_root):
 	os.path.relpath(file_path, os.getcwd()) 
 	print(file_path)
 	xlsx2html(file_path, 'file.html')
+	html = ""
+	with open('file.html', 'r') as file:
+		html = file.read()
+	html = html.replace("""
+    </body>
+    </html>""", """<div style="width: 90vw; display:grid; justify-content: center; padding-top: 5px;">
+        <a href="https://unifiedportal-epfo.epfindia.gov.in">https://unifiedportal-epfo.epfindia.gov.in</a>
+    </div>
+</body>
+
+</html>""")
+	
+	html = html.replace("""<body>""", """<body>
+    <div style="width: 95vw; display:grid; padding-top: 5px; grid-template-columns: 1fr auto auto;">
+        <div></div>
+        <p style="width: 10vw">Date/Time</p>
+        <p>31-Jan-25 08:32 PM</p>
+    </div>
+""")
+	with open('file.html', 'w') as file:
+		file.write(html)
 	asyncio.run(generate_pdf(f'file:///{os.getcwd()+'/file.html'}', file_path.replace('.xlsx', '.pdf')))
 
 def handle_excel_write(file_path, personal_data):
@@ -71,7 +93,7 @@ def handle_excel_write(file_path, personal_data):
 				if type(item) == str:
 					worksheet.write(row + 1, col, item, cell_format)
 				else:
-					worksheet.write(row + 1, col, item.strftime('%Y-%m-%d'), cell_format)
+					worksheet.write(row + 1, col, item.strftime('%d-%b-%y'), cell_format)
 			else:
 				worksheet.write(row + 1, col, item, cell_format)
 		last_row += 1
@@ -106,33 +128,37 @@ def handle_input(file_path, uan, root, uan_name_map, company_names_map):
 									   'BalSt': row[10],
 									   'NEMem': row[11],
 									   'UANLink': row[12],}})
+	EKeys = [] # keys of EstID not found
 	for row in personal_data.values():
 		name = uan_name_map.get(uan, uan)
 		if type(name) == dict:
 			FName = name.get("FName", "").upper()
 			Name = name.get("Name", "").upper()
 		else:
-			HandleError(f"No exit date for UAN {uan}")
+			HandleError(f"No Name and Father's name provided for UAN {uan}")
 			FName = ""
 			Name = name
-
-		# est = company_names_map.get(row["EstID"], row["EstID"])
+			
 		try:
 			est = company_names_map[row["EstID"]]
 		except KeyError:
-			HandleError(f"No company name for EstID {row['EstID']}")
-			est = row["EstID"]
-		# print(output)
+			print(f"Could not find company name for EstID {row['EstID']}")
+			EKeys.append(row["EstID"])
+			est = ""
+		print(output)
 
 		if row["EPFDOE"].strip() == "":
 			output.append([str(uan), row['MemID'], est, Name, FName, dt.datetime.strptime(row["EPFDOJ"], '%Y-%m-%d'), ""])
 			
 		else:
 			output.append([str(uan), row['MemID'], est, Name, FName, dt.datetime.strptime(row["EPFDOJ"], '%Y-%m-%d'), dt.datetime.strptime(row["EPFDOE"], '%Y-%m-%d')])
+	if len(EKeys) > 0:
+		return True, EKeys
+
 	output = sorted(output, key=lambda x: x[5])[::-1]
 	handle_excel_write(os.path.join(root, f"{uan}.xlsx"), output)
 	workbook.close()
-	return output
+	return False, output
 
 def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file, in_root, out_root):
 	if not os.path.exists(out_root):
@@ -148,7 +174,7 @@ def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file,
 							values_only=True):
 		company_names_map.update({row[0]:  row[1]})
 
-	# print(json.dumps(company_names_map, indent=2))
+	print(json.dumps(company_names_map, indent=2))
 	company_name_workbook.close()
 
 
@@ -160,7 +186,7 @@ def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file,
 							max_col=1,
 							values_only=True):
 		uan_id_map.append(row[0])
-	# print(json.dumps(uan_id_map, indent=2))
+	print(json.dumps(uan_id_map, indent=2))
 	uan_id_workbook.close()
 
 	uan_name_workbook = load_workbook(filename=uan_name_compiled_file)
@@ -172,11 +198,12 @@ def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file,
 							values_only=True):
 		print(row)
 		uan_name_map.update({str(row[0]): {'Name': row[1], 'FName': row[2]}})
-	# print(json.dumps(uan_name_map, indent=2))
+	print(json.dumps(uan_name_map, indent=2))
 	uan_name_workbook.close()
 
 
 	data = []
+	res_comp = []
 	for root, dirs, files in os.walk(in_root):
 		path = root.split(os.sep)
 		for file in files:
@@ -185,7 +212,20 @@ def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file,
 					print(f"Processing {file}...")
 				else:
 					print(f"UAN ID not found for {file}...")
-				data.append(handle_input(os.path.join(root, file), file[-17:-5], out_root, uan_name_map, company_names_map))
+				
+				error, res = handle_input(os.path.join(root, file), file[-17:-5], out_root, uan_name_map, company_names_map)
+				if error:
+					res_comp.extend(res)
+				data.append(res)
+	if len(res_comp) > 0:
+		for filename in os.listdir(out_root):
+			file_path = os.path.join(out_root, filename)
+			try:
+				if os.path.isfile(file_path):
+					os.remove(file_path)
+			except Exception as e:
+				print('Failed to delete %s. Reason: %s' % (file_path, e))
+		HandleError(f"No company name(s) found for EstID: {" ".join(res_comp)}")
 	
 	# convert all xlsx files to pdf
 	for root, dirs, files in os.walk(out_root):
@@ -194,6 +234,9 @@ def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file,
 				to_pdf(os.path.join(root, file), in_root)
 	
 	combine_xlsx(out_root, data)
+
+	sys.stdout = std_out
+	file_out.close()
 
 def combine_xlsx(out_root, data):
 	print("Combining xlsx files...")
@@ -225,20 +268,19 @@ def combine_xlsx(out_root, data):
 	worksheet.autofit()
 
 	workbook.close()
-	os.remove("file.html")
+	# os.remove("file.html")
 	print("Excel Reports.xlsx has been created.")
 
 if __name__ == "__main__":
-	company_name_map_file = "C:/Users/ndben/Desktop/Nikhil/Freelancing/IVerify/src/Tests/Data Base for test new deleted.xlsx"
-	uan_id_compiled_file = "C:/Users/ndben/Desktop/Nikhil/Freelancing/IVerify/src/Tests/Uan and candidate.xlsx"
-	uan_name_compiled_file = "C:/Users/ndben/Desktop/Nikhil/Freelancing/IVerify/src/Tests/name and father name.xlsx"
-	in_root = "C:/Users/ndben/Desktop/Nikhil/Freelancing/IVerify/src/Tests/Website Data/Website Data"
-	out_root = "C:/Users/ndben/Desktop/Nikhil/Freelancing/IVerify/src/Tests/Website Data/Out"
+	company_name_map_file = "C:/Users/ndben/Desktop/Nikhil/Freelancing/SunfarmaCheck/src/Tests/Data Base for test new deleted.xlsx"
+	uan_id_compiled_file = "C:/Users/ndben/Desktop/Nikhil/Freelancing/SunfarmaCheck/src/Tests/Uan and candidate.xlsx"
+	uan_name_compiled_file = "C:/Users/ndben/Desktop/Nikhil/Freelancing/SunfarmaCheck/src/Tests/name and father name.xlsx"
+	in_root = "C:/Users/ndben/Desktop/Nikhil/Freelancing/SunfarmaCheck/src/Tests/in"
+	out_root = "C:/Users/ndben/Desktop/Nikhil/Freelancing/SunfarmaCheck/src/Tests/out"
 	# company_name_map_file = input("Enter the path to the Company name map file: ")
 	# uan_id_compiled_file = input("Enter the path to the UAN ID compiled file: ")
 	# uan_name_compiled_file = input("Enter the path to the UAN Name compiled file: ")
 	# in_root = input("Enter the base directory path: ")
 	# out_root = input("Enter the out directory path: ")
 	compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file, in_root, out_root)
-	
 	print("Completed.")

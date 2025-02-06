@@ -8,20 +8,20 @@ from pyppeteer import launch
 import platform
 from xlsx2html import xlsx2html
 import sys
-from tkinter import messagebox
-import shutil
+import tkinter as tk
+from Popup import Popup
 
 std_out = sys.stdout
 file_out = open("log.txt", "w")
 sys.stdout = file_out
-def HandleError(e):
-	messagebox.showerror("Error", f"An error occurred: {str(e)}")
+def HandleError(e, root):
+	Popup(title="Error", message=f"An error occurred: {str(e)}", master=root)
 	print(e)
 	sys.stdout = std_out
 	file_out.close()
 	sys.exit(1)
 	
-async def generate_pdf(url, pdf_path):
+async def generate_pdf(url, pdf_path, tk_root):
 	try:
 		bpth = os.getcwd()+'/chrome-win/chrome.exe'
 		print(bpth)
@@ -39,7 +39,7 @@ async def generate_pdf(url, pdf_path):
 		await browser.close()
 	# converter.convert(f'{url}', f'{pdf_path}')
 
-def to_pdf(file_path, in_root):
+def to_pdf(file_path, in_root, tk_root):
 	print(f"Generating PDF for of {file_path}...")
 	file_path = file_path.replace('\\', '/')
 	os.path.relpath(file_path, os.getcwd()) 
@@ -49,26 +49,26 @@ def to_pdf(file_path, in_root):
 	with open('file.html', 'r') as file:
 		html = file.read()
 	html = html.replace("""
-    </body>
-    </html>""", """<div style="width: 90vw; display:grid; justify-content: center; padding-top: 5px;">
-        <a href="https://unifiedportal-epfo.epfindia.gov.in">https://unifiedportal-epfo.epfindia.gov.in</a>
-    </div>
+	</body>
+	</html>""", """<div style="width: 90vw; display:grid; justify-content: center; padding-top: 5px;">
+		<a href="https://unifiedportal-epfo.epfindia.gov.in">https://unifiedportal-epfo.epfindia.gov.in</a>
+	</div>
 </body>
 
 </html>""")
 	
-	html = html.replace("""<body>""", """<body>
-    <div style="width: 95vw; display:grid; padding-top: 5px; grid-template-columns: 1fr auto auto;">
-        <div></div>
-        <p style="width: 10vw">Date/Time</p>
-        <p>31-Jan-25 08:32 PM</p>
-    </div>
+	html = html.replace("""<body>""", f"""<body>
+	<div style="width: 95vw; display:grid; padding-top: 5px; grid-template-columns: 1fr auto auto;">
+		<div></div>
+		<p style="width: 10vw">Date/Time</p>
+		<p>{dt.datetime.now().strftime("%d-%b-%y %I:%M %p")}</p>
+	</div>
 """)
 	with open('file.html', 'w') as file:
 		file.write(html)
 	asyncio.run(generate_pdf(f'file:///{os.getcwd()+'/file.html'}', file_path.replace('.xlsx', '.pdf')))
 
-def handle_excel_write(file_path, personal_data):
+def handle_excel_write(file_path, personal_data, tk_root):
 	# Create a workbook and add a worksheet.
 	workbook = xlsxwriter.Workbook(file_path)
 	worksheet = workbook.add_worksheet()
@@ -103,7 +103,7 @@ def handle_excel_write(file_path, personal_data):
 	
 
 
-def handle_input(file_path, uan, root, uan_name_map, company_names_map):
+def handle_input(file_path, uan, root, uan_name_map, company_names_map, tk_root):
 	output = []
 	workbook = load_workbook(filename=file_path)
 	sheet = workbook.active
@@ -135,7 +135,8 @@ def handle_input(file_path, uan, root, uan_name_map, company_names_map):
 			FName = name.get("FName", "").upper()
 			Name = name.get("Name", "").upper()
 		else:
-			HandleError(f"No Name and Father's name provided for UAN {uan}")
+			print(row, name)
+			HandleError(f"No Name and Father's name provided for UAN {uan}", tk_root)
 			FName = ""
 			Name = name
 			
@@ -156,11 +157,11 @@ def handle_input(file_path, uan, root, uan_name_map, company_names_map):
 		return True, EKeys
 
 	output = sorted(output, key=lambda x: x[5])[::-1]
-	handle_excel_write(os.path.join(root, f"{uan}.xlsx"), output)
+	handle_excel_write(os.path.join(root, f"{uan}.xlsx"), output, tk_root)
 	workbook.close()
 	return False, output
 
-def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file, in_root, out_root):
+def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file, in_root, out_root, tk_root):
 	if not os.path.exists(out_root):
 		os.makedirs(out_root)	
 	company_name_workbook = load_workbook(filename=company_name_map_file)
@@ -178,28 +179,33 @@ def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file,
 	company_name_workbook.close()
 
 
+	uan_name_workbook = load_workbook(filename=uan_name_compiled_file)
+	uan_name_map = {}
+	uan_name_sheet = uan_name_workbook.active
+	for row in uan_name_sheet.iter_rows(min_row=0,
+							min_col=0,
+							max_col=3,
+							values_only=True):
+		uan_name_map.update({str(row[0]): {'Name': row[1], 'FName': row[2]}})
+	uan_name_workbook.close()
+
 	uan_id_workbook = load_workbook(filename=uan_id_compiled_file)
 	uan_id_sheet = uan_id_workbook.active
 	uan_id_map = []
 	for row in uan_id_sheet.iter_rows(min_row=2,
 							min_col=0,
-							max_col=1,
+							max_col=2,
 							values_only=True):
+		
 		uan_id_map.append(row[0])
+		if uan_name_map.get(str(row[0]), None) is not None:
+			# if the Fname column is not empty, use it as the Father's name
+			if uan_name_map[str(row[0])]["FName"] in ["", " ", None]:
+				uan_name_map[str(row[0])] = {'Name': row[1], 'FName': uan_name_map[str(row[0])]["Name"]}
+	print(json.dumps(uan_name_map, indent=2))
 	print(json.dumps(uan_id_map, indent=2))
 	uan_id_workbook.close()
 
-	uan_name_workbook = load_workbook(filename=uan_name_compiled_file)
-	uan_name_sheet = uan_name_workbook.active
-	uan_name_map = {}
-	for row in uan_name_sheet.iter_rows(min_row=0,
-							min_col=0,
-							max_col=3,
-							values_only=True):
-		print(row)
-		uan_name_map.update({str(row[0]): {'Name': row[1], 'FName': row[2]}})
-	print(json.dumps(uan_name_map, indent=2))
-	uan_name_workbook.close()
 
 
 	data = []
@@ -213,10 +219,11 @@ def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file,
 				else:
 					print(f"UAN ID not found for {file}...")
 				
-				error, res = handle_input(os.path.join(root, file), file[-17:-5], out_root, uan_name_map, company_names_map)
+				error, res = handle_input(os.path.join(root, file), file[-17:-5], out_root, uan_name_map, company_names_map, tk_root)
 				if error:
 					res_comp.extend(res)
 				data.append(res)
+
 	if len(res_comp) > 0:
 		for filename in os.listdir(out_root):
 			file_path = os.path.join(out_root, filename)
@@ -225,20 +232,21 @@ def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file,
 					os.remove(file_path)
 			except Exception as e:
 				print('Failed to delete %s. Reason: %s' % (file_path, e))
-		HandleError(f"No company name(s) found for EstID: {" ".join(res_comp)}")
+		comps = "\n".join([", ".join(res_comp[x:x+5]) for x in range(0, len(data), 5)])
+		HandleError(f"No company name(s) found for EstID: {comps}", tk_root)
 	
 	# convert all xlsx files to pdf
 	for root, dirs, files in os.walk(out_root):
 		for file in files:
 			if file.endswith(".xlsx"):
-				to_pdf(os.path.join(root, file), in_root)
+				to_pdf(os.path.join(root, file), in_root, tk_root)
 	
-	combine_xlsx(out_root, data)
+	combine_xlsx(out_root, data, tk_root)
 
 	sys.stdout = std_out
 	file_out.close()
 
-def combine_xlsx(out_root, data):
+def combine_xlsx(out_root, data, tk_root):
 	print("Combining xlsx files...")
 	# reads all the xlsx files in the directory and combines all the data into one xlsx file and saves it, uses xlsx writer
 	# seperate tables for each uan id
@@ -272,15 +280,20 @@ def combine_xlsx(out_root, data):
 	print("Excel Reports.xlsx has been created.")
 
 if __name__ == "__main__":
-	company_name_map_file = "C:/Users/ndben/Desktop/Nikhil/Freelancing/SunfarmaCheck/src/Tests/Data Base for test new deleted.xlsx"
-	uan_id_compiled_file = "C:/Users/ndben/Desktop/Nikhil/Freelancing/SunfarmaCheck/src/Tests/Uan and candidate.xlsx"
-	uan_name_compiled_file = "C:/Users/ndben/Desktop/Nikhil/Freelancing/SunfarmaCheck/src/Tests/name and father name.xlsx"
-	in_root = "C:/Users/ndben/Desktop/Nikhil/Freelancing/SunfarmaCheck/src/Tests/in"
+	company_name_map_file = "C:\\Users\\ndben\\Desktop\\Nikhil\\Freelancing\\SunfarmaCheck\\src\\Tests\\SUN UAN NUMBER - 71 AND PAN Aadhaar - 50\\Compony Data.xlsx"
+	uan_id_compiled_file = "C:\\Users\\ndben\\Desktop\\Nikhil\\Freelancing\\SunfarmaCheck\\src\\Tests\\SUN UAN NUMBER - 71 AND PAN Aadhaar - 50\\Name.xlsx"
+	uan_name_compiled_file = "C:\\Users\\ndben\\Desktop\\Nikhil\\Freelancing\\SunfarmaCheck\\src\\Tests\\SUN UAN NUMBER - 71 AND PAN Aadhaar - 50\\Father.xlsx"
+	in_root = "C:\\Users\\ndben\\Desktop\\Nikhil\\Freelancing\\SunfarmaCheck\\src\\Tests\\SUN UAN NUMBER - 71 AND PAN Aadhaar - 50\\SUN UAN NUMBER - 71"
 	out_root = "C:/Users/ndben/Desktop/Nikhil/Freelancing/SunfarmaCheck/src/Tests/out"
 	# company_name_map_file = input("Enter the path to the Company name map file: ")
 	# uan_id_compiled_file = input("Enter the path to the UAN ID compiled file: ")
 	# uan_name_compiled_file = input("Enter the path to the UAN Name compiled file: ")
 	# in_root = input("Enter the base directory path: ")
 	# out_root = input("Enter the out directory path: ")
-	compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file, in_root, out_root)
+	# Main Application
+	root = tk.Tk()
+	root.title("Excel and PDF Processor")
+	root.geometry("600x600")
+	root.resizable(False, False)
+	compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file, in_root, out_root, root)
 	print("Completed.")

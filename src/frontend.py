@@ -35,27 +35,9 @@ def start_processing(company_file, uan_id_file, uan_name_file, input_folder, out
 
     try:
         # Pass the corrected output folder to the compute function
-        compute(company_file, uan_id_file, uan_name_file, input_folder, output_folder)
-        show_save_options(output_folder)
+        compute(company_file, uan_id_file, uan_name_file, input_folder, output_folder, root)
     except Exception as e:
         messagebox.showerror("Error", f"An error occurred: {e}")
-
-def show_save_options(output_folder):
-    save_window = tk.Toplevel()
-    save_window.title("Save Options")
-    save_window.geometry("400x200")
-    Label(save_window, text="Select the format to save:", font=("Arial", 12)).pack(pady=20)
-
-    def save_as_excel():
-        messagebox.showinfo("Success", f"Excel file saved in {output_folder}.")
-        save_window.destroy()
-
-    def save_as_pdf():
-        messagebox.showinfo("Success", f"PDF file saved in {output_folder}.")
-        save_window.destroy()
-
-    Button(save_window, text="Save as Excel", command=save_as_excel).pack(pady=10)
-    Button(save_window, text="Save as PDF", command=save_as_pdf).pack(pady=10)
 
 # Main Application
 root = tk.Tk()

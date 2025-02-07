@@ -19,14 +19,13 @@ def browse_folder(entry_field):
         entry_field.delete(0, tk.END)
         entry_field.insert(0, folder_path)
 
-def start_processing(company_file, uan_id_file, uan_name_file, input_folder, output_folder):
+def start_processing(company_file, uan_id_file, input_folder, output_folder):
     company_file = company_file.get()
     uan_id_file = uan_id_file.get()
-    uan_name_file = uan_name_file.get()
     input_folder = input_folder.get()
     output_folder = output_folder.get()
 
-    if not (company_file and uan_id_file and uan_name_file and input_folder and output_folder):
+    if not (company_file and uan_id_file and input_folder and output_folder):
         messagebox.showerror("Error", "Please fill in all fields.")
         return
 
@@ -35,51 +34,48 @@ def start_processing(company_file, uan_id_file, uan_name_file, input_folder, out
 
     try:
         # Pass the corrected output folder to the compute function
-        compute(company_file, uan_id_file, uan_name_file, input_folder, output_folder, root)
+        compute(company_file, uan_id_file, input_folder, output_folder, root)
+        messagebox.showinfo("Done!!", "Completed!!")
     except Exception as e:
         messagebox.showerror("Error", f"An error occurred: {e}")
 
-def main():
-    # Main Application
-    root = tk.Tk()
-    root.title("Excel and PDF Processor")
-    root.geometry("600x600")
-    root.resizable(False, False)
 
-    # Heading
-    heading = Label(root, text="Excel and PDF Processor", font=("Arial", 18, "bold"))
-    heading.pack(pady=30)
+# Main Application
+root = tk.Tk()
+root.title("Excel and PDF Processor")
+root.geometry("600x600")
+root.resizable(False, False)
 
-    # File selection fields
-    fields = [
-        ("Select the Company Data File:", browse_file),
-        ("Select the UAN ID File:", browse_file),
-        ("Select the Father's Name List File:", browse_file),
-        ("Select the Input Folder:", browse_folder),
-        ("Select the Output Folder:", browse_folder)
-    ]
+# Heading
+heading = Label(root, text="Excel and PDF Processor", font=("Arial", 18, "bold"))
+heading.pack(pady=30)
 
-    entries = []
+# File selection fields
+fields = [
+    ("Select the Company Data File:", browse_file),
+    ("Select the UAN Candidate Data File:", browse_file),
+    ("Select the Input Folder:", browse_folder),
+    ("Select the Output Folder:", browse_folder)
+]
 
-    for label_text, browse_function in fields:
-        frame = tk.Frame(root)
-        frame.pack(pady=10, padx=20, fill=tk.X)
+entries = []
 
-        label = Label(frame, text=label_text, anchor="w", width=25)
-        label.pack(side=tk.LEFT, padx=5)
+for label_text, browse_function in fields:
+    frame = tk.Frame(root)
+    frame.pack(pady=10, padx=20, fill=tk.X)
 
-        entry = Entry(frame, width=20)
-        entry.pack(side=tk.LEFT, padx=5)
-        entries.append(entry)
+    label = Label(frame, text=label_text, anchor="w", width=25)
+    label.pack(side=tk.LEFT, padx=5)
 
-        browse_btn = Button(frame, text="Browse", command=partial(browse_function, entry))
-        browse_btn.pack(side=tk.LEFT, padx=5)
+    entry = Entry(frame, width=20)
+    entry.pack(side=tk.LEFT, padx=5)
+    entries.append(entry)
 
-    # Start Process Button
-    start_btn = Button(root, text="Start Process", command=lambda: start_processing(*entries), width=20)
-    start_btn.pack(pady=30)
+    browse_btn = Button(frame, text="Browse", command=partial(browse_function, entry))
+    browse_btn.pack(side=tk.LEFT, padx=5)
 
-    root.mainloop()
+# Start Process Button
+start_btn = Button(root, text="Start Process", command=lambda: start_processing(*entries), width=20)
+start_btn.pack(pady=30)
 
-if __name__ == "__main__":
-    main()
+root.mainloop()

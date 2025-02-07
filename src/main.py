@@ -21,7 +21,7 @@ def HandleError(e, root):
 	print(e)
 	sys.stdout = std_out
 	file_out.close()
-	sys.exit(1)
+	# sys.exit(1)
 	
 async def generate_pdf(url, pdf_path, tk_root):
 	try:
@@ -160,7 +160,7 @@ def handle_input(file_path, uan, root, uan_name_map, company_names_map, tk_root)
 	workbook.close()
 	return False, output
 
-def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file, in_root, out_root, tk_root):
+def compute(company_name_map_file, uan_id_compiled_file, in_root, out_root, tk_root):
 	if not os.path.exists(out_root):
 		os.makedirs(out_root)	
 	company_name_workbook = load_workbook(filename=company_name_map_file)
@@ -178,33 +178,37 @@ def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file,
 	company_name_workbook.close()
 
 
-	uan_name_workbook = load_workbook(filename=uan_name_compiled_file)
+	uan_name_workbook = load_workbook(filename=uan_id_compiled_file)
 	uan_name_map = {}
+	uan_id_map = []
 	uan_name_sheet = uan_name_workbook.active
 	for row in uan_name_sheet.iter_rows(min_row=0,
 							min_col=0,
 							max_col=3,
 							values_only=True):
+		if row[2] in ["", " ", None]:
+			HandleError(f"Father's Name not found for UAN ID {row[0]}", tk_root)
+			continue
 		uan_name_map.update({str(row[0]): {'Name': row[1], 'FName': row[2]}})
+		uan_id_map.append(row[0])
 	uan_name_workbook.close()
 
-	uan_id_workbook = load_workbook(filename=uan_id_compiled_file)
-	uan_id_sheet = uan_id_workbook.active
-	uan_id_map = []
-	for row in uan_id_sheet.iter_rows(min_row=2,
-							min_col=0,
-							max_col=2,
-							values_only=True):
+	# uan_id_workbook = load_workbook(filename=uan_id_compiled_file)
+	# uan_id_sheet = uan_id_workbook.active
+	# for row in uan_id_sheet.iter_rows(min_row=2,
+	# 						min_col=0,
+	# 						max_col=2,
+	# 						values_only=True):
 		
-		uan_id_map.append(row[0])
-		if uan_name_map.get(str(row[0]), None) is not None:
-			# if the Fname column is not empty, use it as the Father's name
-			if uan_name_map[str(row[0])]["FName"] in ["", " ", None]:
-				print("NAME MAP!!!", row)
-				uan_name_map[str(row[0])] = {'Name': row[1], 'FName': uan_name_map[str(row[0])]["Name"]}
-	print("\n\n UAN NAme MAP\n\n", json.dumps(uan_name_map, indent=2))
-	print(json.dumps(uan_id_map, indent=2))
-	uan_id_workbook.close()
+	# 	uan_id_map.append(row[0])
+	# 	if uan_name_map.get(str(row[0]), None) is not None:
+	# 		# if the Fname column is not empty, use it as the Father's name
+	# 		if uan_name_map[str(row[0])]["FName"] in ["", " ", None]:
+	# 			print("NAME MAP!!!", row)
+	# 			uan_name_map[str(row[0])] = {'Name': row[1], 'FName': uan_name_map[str(row[0])]["Name"]}
+	# print("\n\n UAN NAme MAP\n\n", json.dumps(uan_name_map, indent=2))
+	# print(json.dumps(uan_id_map, indent=2))
+	# uan_id_workbook.close()
 
 
 
@@ -225,13 +229,13 @@ def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file,
 				data.append(res)
 
 	if len(res_comp) > 0:
-		for filename in os.listdir(out_root):
-			file_path = os.path.join(out_root, filename)
-			try:
-				if os.path.isfile(file_path):
-					os.remove(file_path)
-			except Exception as e:
-				print('Failed to delete %s. Reason: %s' % (file_path, e))
+		# for filename in os.listdir(out_root):
+		# 	file_path = os.path.join(out_root, filename)
+		# 	try:
+		# 		if os.path.isfile(file_path):
+		# 			os.remove(file_path)
+		# 	except Exception as e:
+		# 		print('Failed to delete %s. Reason: %s' % (file_path, e))
 		if not isDebugging:
 			comps = "\n".join([", ".join(res_comp[x:x+5]) for x in range(0, len(data), 5)])
 			HandleError(f"No company name(s) found for EstID: {comps}", tk_root)

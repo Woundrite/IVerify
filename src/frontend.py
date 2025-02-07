@@ -39,43 +39,47 @@ def start_processing(company_file, uan_id_file, uan_name_file, input_folder, out
     except Exception as e:
         messagebox.showerror("Error", f"An error occurred: {e}")
 
-# Main Application
-root = tk.Tk()
-root.title("Excel and PDF Processor")
-root.geometry("600x600")
-root.resizable(False, False)
+def main():
+    # Main Application
+    root = tk.Tk()
+    root.title("Excel and PDF Processor")
+    root.geometry("600x600")
+    root.resizable(False, False)
 
-# Heading
-heading = Label(root, text="Excel and PDF Processor", font=("Arial", 18, "bold"))
-heading.pack(pady=30)
+    # Heading
+    heading = Label(root, text="Excel and PDF Processor", font=("Arial", 18, "bold"))
+    heading.pack(pady=30)
 
-# File selection fields
-fields = [
-    ("Select the Company Data File:", browse_file),
-    ("Select the UAN ID File:", browse_file),
-    ("Select the Father's Name List File:", browse_file),
-    ("Select the Input Folder:", browse_folder),
-    ("Select the Output Folder:", browse_folder)
-]
+    # File selection fields
+    fields = [
+        ("Select the Company Data File:", browse_file),
+        ("Select the UAN ID File:", browse_file),
+        ("Select the Father's Name List File:", browse_file),
+        ("Select the Input Folder:", browse_folder),
+        ("Select the Output Folder:", browse_folder)
+    ]
 
-entries = []
+    entries = []
 
-for label_text, browse_function in fields:
-    frame = tk.Frame(root)
-    frame.pack(pady=10, padx=20, fill=tk.X)
+    for label_text, browse_function in fields:
+        frame = tk.Frame(root)
+        frame.pack(pady=10, padx=20, fill=tk.X)
 
-    label = Label(frame, text=label_text, anchor="w", width=25)
-    label.pack(side=tk.LEFT, padx=5)
+        label = Label(frame, text=label_text, anchor="w", width=25)
+        label.pack(side=tk.LEFT, padx=5)
 
-    entry = Entry(frame, width=20)
-    entry.pack(side=tk.LEFT, padx=5)
-    entries.append(entry)
+        entry = Entry(frame, width=20)
+        entry.pack(side=tk.LEFT, padx=5)
+        entries.append(entry)
 
-    browse_btn = Button(frame, text="Browse", command=partial(browse_function, entry))
-    browse_btn.pack(side=tk.LEFT, padx=5)
+        browse_btn = Button(frame, text="Browse", command=partial(browse_function, entry))
+        browse_btn.pack(side=tk.LEFT, padx=5)
 
-# Start Process Button
-start_btn = Button(root, text="Start Process", command=lambda: start_processing(*entries), width=20)
-start_btn.pack(pady=30)
+    # Start Process Button
+    start_btn = Button(root, text="Start Process", command=lambda: start_processing(*entries), width=20)
+    start_btn.pack(pady=30)
 
-root.mainloop()
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()

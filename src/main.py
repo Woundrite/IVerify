@@ -11,6 +11,8 @@ import sys
 import tkinter as tk
 from Popup import Popup
 
+isDebugging = False
+
 std_out = sys.stdout
 file_out = open("log.txt", "w")
 sys.stdout = file_out
@@ -31,7 +33,7 @@ async def generate_pdf(url, pdf_path, tk_root):
 		page = await browser.newPage()
 		
 		await page.goto(url)
-		
+		print(f"Generated PDF: {pdf_path}")
 		await page.pdf({'path': pdf_path, 'format': 'A4', 'printBackground': True})
 	except Exception as e:
 		print(f"Error generating PDF: {e}")
@@ -48,14 +50,10 @@ def to_pdf(file_path, in_root, tk_root):
 	html = ""
 	with open('file.html', 'r') as file:
 		html = file.read()
-	html = html.replace("""
-	</body>
-	</html>""", """<div style="width: 90vw; display:grid; justify-content: center; padding-top: 5px;">
+	html = html.replace("""</body>""", """<div style="width: 90vw; display:grid; justify-content: center; padding-top: 5px;">
 		<a href="https://unifiedportal-epfo.epfindia.gov.in">https://unifiedportal-epfo.epfindia.gov.in</a>
 	</div>
-</body>
-
-</html>""")
+</body>""")
 	
 	html = html.replace("""<body>""", f"""<body>
 	<div style="width: 95vw; display:grid; padding-top: 5px; grid-template-columns: 1fr auto auto;">
@@ -66,7 +64,7 @@ def to_pdf(file_path, in_root, tk_root):
 """)
 	with open('file.html', 'w') as file:
 		file.write(html)
-	asyncio.run(generate_pdf(f'file:///{os.getcwd()+'/file.html'}', file_path.replace('.xlsx', '.pdf')))
+	asyncio.run(generate_pdf(f'file:///{os.getcwd()+'/file.html'}', file_path.replace('.xlsx', '.pdf'), tk_root))
 
 def handle_excel_write(file_path, personal_data, tk_root):
 	# Create a workbook and add a worksheet.
@@ -136,7 +134,8 @@ def handle_input(file_path, uan, root, uan_name_map, company_names_map, tk_root)
 			Name = name.get("Name", "").upper()
 		else:
 			print(row, name)
-			HandleError(f"No Name and Father's name provided for UAN {uan}", tk_root)
+			if not isDebugging:
+				HandleError(f"No Name and Father's name provided for UAN {uan}", tk_root)
 			FName = ""
 			Name = name
 			
@@ -201,8 +200,9 @@ def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file,
 		if uan_name_map.get(str(row[0]), None) is not None:
 			# if the Fname column is not empty, use it as the Father's name
 			if uan_name_map[str(row[0])]["FName"] in ["", " ", None]:
+				print("NAME MAP!!!", row)
 				uan_name_map[str(row[0])] = {'Name': row[1], 'FName': uan_name_map[str(row[0])]["Name"]}
-	print(json.dumps(uan_name_map, indent=2))
+	print("\n\n UAN NAme MAP\n\n", json.dumps(uan_name_map, indent=2))
 	print(json.dumps(uan_id_map, indent=2))
 	uan_id_workbook.close()
 
@@ -232,8 +232,9 @@ def compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file,
 					os.remove(file_path)
 			except Exception as e:
 				print('Failed to delete %s. Reason: %s' % (file_path, e))
-		comps = "\n".join([", ".join(res_comp[x:x+5]) for x in range(0, len(data), 5)])
-		HandleError(f"No company name(s) found for EstID: {comps}", tk_root)
+		if not isDebugging:
+			comps = "\n".join([", ".join(res_comp[x:x+5]) for x in range(0, len(data), 5)])
+			HandleError(f"No company name(s) found for EstID: {comps}", tk_root)
 	
 	# convert all xlsx files to pdf
 	for root, dirs, files in os.walk(out_root):

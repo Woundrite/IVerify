@@ -19,8 +19,8 @@ sys.stdout = file_out
 def HandleError(e, root):
 	Popup(title="Error", message=f"An error occurred: {str(e)}", master=root)
 	print(e)
-	sys.stdout = std_out
-	file_out.close()
+	# sys.stdout = std_out
+	# file_out.close()
 	# sys.exit(1)
 	
 async def generate_pdf(url, pdf_path, tk_root):
@@ -102,6 +102,8 @@ def handle_excel_write(file_path, personal_data, tk_root):
 
 
 def handle_input(file_path, uan, root, uan_name_map, company_names_map, tk_root):
+	if uan == None:
+		return True, None
 	output = []
 	workbook = load_workbook(filename=file_path)
 	sheet = workbook.active
@@ -126,6 +128,13 @@ def handle_input(file_path, uan, root, uan_name_map, company_names_map, tk_root)
 									   'BalSt': row[10],
 									   'NEMem': row[11],
 									   'UANLink': row[12],}})
+	if len(personal_data) == 0:
+		if not isDebugging:
+			HandleError(f"No data found in file {file_path}", tk_root)
+		return
+	
+	print(personal_data)
+
 	EKeys = [] # keys of EstID not found
 	for row in personal_data.values():
 		name = uan_name_map.get(uan, uan)
@@ -133,9 +142,9 @@ def handle_input(file_path, uan, root, uan_name_map, company_names_map, tk_root)
 			FName = name.get("FName", "").upper()
 			Name = name.get("Name", "").upper()
 		else:
-			print(row, name)
 			if not isDebugging:
 				HandleError(f"No Name and Father's name provided for UAN {uan}", tk_root)
+				continue
 			FName = ""
 			Name = name
 			
@@ -147,9 +156,18 @@ def handle_input(file_path, uan, root, uan_name_map, company_names_map, tk_root)
 			est = ""
 		print(output)
 
+		if (type(row["EPFDOJ"]) == int) or (type(row["EPFDOJ"]) == str and row["EPFDOJ"].strip() == ""):
+			HandleError(f"No date of joining provided for\nUAN {uan}, {row["MemID"]}:\nAssuming today's Datetime", tk_root)
+			row["EPFDOJ"] = dt.datetime.now().strftime('%Y-%m-%d')
+		
+		if (type(row["EPFDOE"]) == int) or (type(row["EPFDOE"]) == str and row["EPFDOE"].strip() == ""):
+			HandleError(f"No date of joining provided for\nUAN {uan}, {row["MemID"]}:\nAssuming no exit", tk_root)
+			row["EPFDOE"] = ""
+		
+		print(row)
+		
 		if row["EPFDOE"].strip() == "":
 			output.append([str(uan), row['MemID'], est, Name, FName, dt.datetime.strptime(row["EPFDOJ"], '%Y-%m-%d'), ""])
-			
 		else:
 			output.append([str(uan), row['MemID'], est, Name, FName, dt.datetime.strptime(row["EPFDOJ"], '%Y-%m-%d'), dt.datetime.strptime(row["EPFDOE"], '%Y-%m-%d')])
 	if len(EKeys) > 0:
@@ -161,6 +179,10 @@ def handle_input(file_path, uan, root, uan_name_map, company_names_map, tk_root)
 	return False, output
 
 def compute(company_name_map_file, uan_id_compiled_file, in_root, out_root, tk_root):
+	print(f"Company Name Map: {company_name_map_file}")
+	print(f"UAN ID Compiled File: {uan_id_compiled_file}")
+	print(f"Input Root: {in_root}")
+	print(f"Output Root: {out_root}")
 	if not os.path.exists(out_root):
 		os.makedirs(out_root)	
 	company_name_workbook = load_workbook(filename=company_name_map_file)
@@ -206,7 +228,8 @@ def compute(company_name_map_file, uan_id_compiled_file, in_root, out_root, tk_r
 	# 		if uan_name_map[str(row[0])]["FName"] in ["", " ", None]:
 	# 			print("NAME MAP!!!", row)
 	# 			uan_name_map[str(row[0])] = {'Name': row[1], 'FName': uan_name_map[str(row[0])]["Name"]}
-	# print("\n\n UAN NAme MAP\n\n", json.dumps(uan_name_map, indent=2))
+
+	print("\n\n UAN Name MAP\n\n", json.dumps(uan_name_map, indent=2))
 	# print(json.dumps(uan_id_map, indent=2))
 	# uan_id_workbook.close()
 
@@ -217,6 +240,7 @@ def compute(company_name_map_file, uan_id_compiled_file, in_root, out_root, tk_r
 	for root, dirs, files in os.walk(in_root):
 		path = root.split(os.sep)
 		for file in files:
+			print("Found File: ", file)
 			if "uanacord_uan_member_data" in file:
 				if file[-17:-5] in uan_name_map.keys():
 					print(f"Processing {file}...")
@@ -225,8 +249,11 @@ def compute(company_name_map_file, uan_id_compiled_file, in_root, out_root, tk_r
 				
 				error, res = handle_input(os.path.join(root, file), file[-17:-5], out_root, uan_name_map, company_names_map, tk_root)
 				if error:
-					res_comp.extend(res)
-				data.append(res)
+					if res != None:
+						res_comp.extend(res)
+				else:
+					print(res)
+					data.append(res)
 
 	if len(res_comp) > 0:
 		# for filename in os.listdir(out_root):
@@ -253,6 +280,7 @@ def compute(company_name_map_file, uan_id_compiled_file, in_root, out_root, tk_r
 
 def combine_xlsx(out_root, data, tk_root):
 	print("Combining xlsx files...")
+	print("\n\n")
 	# reads all the xlsx files in the directory and combines all the data into one xlsx file and saves it, uses xlsx writer
 	# seperate tables for each uan id
 	# Create a workbook and add a worksheet.
@@ -263,9 +291,9 @@ def combine_xlsx(out_root, data, tk_root):
 	# add border to the cells.
 	cell_format = workbook.add_format({'border': 1, 'align': 'center', 'valign': 'vcenter'})
 	row = 0
-	col = 0
+	# print(json.dumps(data, indent=4))
+	
 	for group in data:
-		
 		worksheet.write(row, 0, 'UAN NUMBER', header_format)
 		worksheet.write(row, 1, 'MEMBER ID', header_format)
 		worksheet.write(row, 2, 'ESTABLISHMENT DETAILS', header_format)
@@ -273,23 +301,42 @@ def combine_xlsx(out_root, data, tk_root):
 		worksheet.write(row, 4, 'FATHER OR HUSBAND \n NAME', header_format)
 		worksheet.write(row, 5, 'DATE OF JOIN', header_format)
 		worksheet.write(row, 6, 'DATE OF EXIT PF', header_format)
+		row+=1
+
 		for r in group:
-			for col, value in enumerate(r):
-				worksheet.write(row + 1, col, value, cell_format)
+			worksheet.write(row, 0, r[0], cell_format)
+			worksheet.write(row, 1, r[1], cell_format)
+			worksheet.write(row, 2, r[2], cell_format)
+			worksheet.write(row, 3, r[3], cell_format)
+			worksheet.write(row, 4, r[4], cell_format)
+
+			if type(r[5]) == str:
+				print("FUUUCKKK", r)
+				worksheet.write(row, 5, r[5], cell_format)
+			else:
+				worksheet.write(row, 5, r[5].strftime('%d-%b-%y'), cell_format)
+			
+			if type(r[6]) == str:
+				print("FUUUCKKK", r[6])
+				worksheet.write(row, 6, r[6], cell_format)
+			else:
+				worksheet.write(row, 6, r[6].strftime('%d-%b-%y'), cell_format)
+
+			print("")
 			row += 1
-			col = 0
+		print("\n\n")
 	worksheet.autofit()
 
 	workbook.close()
-	# os.remove("file.html")
+	os.remove("file.html")
 	print("Excel Reports.xlsx has been created.")
 
 if __name__ == "__main__":
-	company_name_map_file = "C:\\Users\\ndben\\Desktop\\Nikhil\\Freelancing\\SunfarmaCheck\\src\\Tests\\SUN UAN NUMBER - 71 AND PAN Aadhaar - 50\\Compony Data.xlsx"
-	uan_id_compiled_file = "C:\\Users\\ndben\\Desktop\\Nikhil\\Freelancing\\SunfarmaCheck\\src\\Tests\\SUN UAN NUMBER - 71 AND PAN Aadhaar - 50\\Name.xlsx"
-	uan_name_compiled_file = "C:\\Users\\ndben\\Desktop\\Nikhil\\Freelancing\\SunfarmaCheck\\src\\Tests\\SUN UAN NUMBER - 71 AND PAN Aadhaar - 50\\Father.xlsx"
-	in_root = "C:\\Users\\ndben\\Desktop\\Nikhil\\Freelancing\\SunfarmaCheck\\src\\Tests\\SUN UAN NUMBER - 71 AND PAN Aadhaar - 50\\SUN UAN NUMBER - 71"
-	out_root = "C:/Users/ndben/Desktop/Nikhil/Freelancing/SunfarmaCheck/src/Tests/out"
+	company_name_map_file = "C:/Users/ndben/Desktop/Nikhil/Freelancing/IVerify/src/Tests/re77uan/ESTABLIBSHMENT LIST.xlsx"
+	# uan_id_compiled_file = "C:/Users/ndben/Desktop/Nikhil/Freelancing/IVerify/src/Tests/T2/Name.xlsx"
+	uan_name_compiled_file = "C:/Users/ndben/Desktop/Nikhil/Freelancing/IVerify/src/Tests/re77uan/data.xlsx"
+	in_root = "C:/Users/ndben/Desktop/Nikhil/Freelancing/IVerify/src/Tests/re77uan/exl"
+	out_root = "C:/Users/ndben/Desktop/Nikhil/Freelancing/IVerify/src/Tests/re77uan/out"
 	# company_name_map_file = input("Enter the path to the Company name map file: ")
 	# uan_id_compiled_file = input("Enter the path to the UAN ID compiled file: ")
 	# uan_name_compiled_file = input("Enter the path to the UAN Name compiled file: ")
@@ -300,5 +347,5 @@ if __name__ == "__main__":
 	root.title("Excel and PDF Processor")
 	root.geometry("600x600")
 	root.resizable(False, False)
-	compute(company_name_map_file, uan_id_compiled_file, uan_name_compiled_file, in_root, out_root, root)
+	compute(company_name_map_file, uan_name_compiled_file, in_root, out_root, root)
 	print("Completed.")

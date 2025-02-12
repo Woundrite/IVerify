@@ -64,7 +64,7 @@ for label_text, browse_function in fields:
     frame = tk.Frame(root)
     frame.pack(pady=10, padx=20, fill=tk.X)
 
-    label = Label(frame, text=label_text, anchor="w", width=25)
+    label = Label(frame, text=label_text, anchor="w", width=35)
     label.pack(side=tk.LEFT, padx=5)
 
     entry = Entry(frame, width=20)

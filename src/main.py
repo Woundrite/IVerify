@@ -156,24 +156,43 @@ def handle_input(file_path, uan, root, uan_name_map, company_names_map, tk_root)
 			est = ""
 		print(output)
 
-		if (type(row["EPFDOJ"]) == int) or (type(row["EPFDOJ"]) == str and row["EPFDOJ"].strip() == ""):
-			HandleError(f"No date of joining provided for\nUAN {uan}, {row["MemID"]}:\nAssuming today's Datetime", tk_root)
-			row["EPFDOJ"] = dt.datetime.now().strftime('%Y-%m-%d')
-		
-		if (type(row["EPFDOE"]) == int) or (type(row["EPFDOE"]) == str and row["EPFDOE"].strip() == ""):
-			HandleError(f"No date of joining provided for\nUAN {uan}, {row["MemID"]}:\nAssuming no exit", tk_root)
-			row["EPFDOE"] = ""
-		
 		print(row)
 		
-		if row["EPFDOE"].strip() == "":
-			output.append([str(uan), row['MemID'], est, Name, FName, dt.datetime.strptime(row["EPFDOJ"], '%Y-%m-%d'), ""])
-		else:
-			output.append([str(uan), row['MemID'], est, Name, FName, dt.datetime.strptime(row["EPFDOJ"], '%Y-%m-%d'), dt.datetime.strptime(row["EPFDOE"], '%Y-%m-%d')])
+		try:
+			if type(row["EPFDOE"]) in [str, type(None)]:
+				if row["EPFDOE"] == None or row["EPFDOE"].strip() == "":
+					print(f"No date of exit provided for UAN {uan}")
+					row["EPFDOE"] = ""
+				else:
+					row["EPFDOE"] = dt.datetime.strptime(row["EPFDOE"], '%Y-%m-%d')
+			else:
+				row["EPFDOE"] = ""
+				# if not isDebugging:
+				# 	HandleError(f"Invalid DOE format for UAN {uan}", tk_root)
+				# 	print(f"Invalid DOE format for UAN {uan}", tk_root)
+
+			if  type(row["EPFDOJ"]) in [str, type(None)]:
+
+				if row["EPFDOJ"] == None or row["EPFDOJ"].strip() == "":
+					row["EPFDOJ"] = ""
+					print(f"No date of join provided for UAN {uan}")
+				else:
+					row["EPFDOJ"] = dt.datetime.strptime(row["EPFDOJ"], '%Y-%m-%d')
+			else:
+				row["EPFDOJ"] = ""
+				# if not isDebugging:
+				# 	HandleError(f"Invalid DOJ format for UAN {uan}", tk_root)
+				# 	print(f"Invalid DOJ format for UAN {uan}", tk_root)
+		except Exception as e:
+			print(f"Error parsing date for UAN {uan}: {e}")
+			print(file_path, uan, root, row)
+			sys.exit(1)
+		
+		output.append([str(uan), row['MemID'], est, Name, FName, row["EPFDOJ"], row["EPFDOE"]])
 	if len(EKeys) > 0:
 		return True, EKeys
-
-	output = sorted(output, key=lambda x: x[5])[::-1]
+	print(output)
+	output = sorted(output, key=lambda x: x[5] if x[5] != "" else dt.datetime.now())[::-1]
 	handle_excel_write(os.path.join(root, f"{uan}.xlsx"), output, tk_root)
 	workbook.close()
 	return False, output
@@ -208,9 +227,13 @@ def compute(company_name_map_file, uan_id_compiled_file, in_root, out_root, tk_r
 							min_col=0,
 							max_col=3,
 							values_only=True):
-		if row[2] in ["", " ", None]:
-			HandleError(f"Father's Name not found for UAN ID {row[0]}", tk_root)
-			continue
+		if row[0] != None:
+			if row[2] in ["", " ", None]:
+				HandleError(f"Father's Name not found for UAN ID {row[0]}", tk_root)
+				continue
+			if row[1] in ["", " ", None]:
+				HandleError(f"Name not found for UAN ID {row[0]}", tk_root)
+				continue
 		uan_name_map.update({str(row[0]): {'Name': row[1], 'FName': row[2]}})
 		uan_id_map.append(row[0])
 	uan_name_workbook.close()
@@ -311,13 +334,11 @@ def combine_xlsx(out_root, data, tk_root):
 			worksheet.write(row, 4, r[4], cell_format)
 
 			if type(r[5]) == str:
-				print("FUUUCKKK", r)
 				worksheet.write(row, 5, r[5], cell_format)
 			else:
 				worksheet.write(row, 5, r[5].strftime('%d-%b-%y'), cell_format)
 			
 			if type(r[6]) == str:
-				print("FUUUCKKK", r[6])
 				worksheet.write(row, 6, r[6], cell_format)
 			else:
 				worksheet.write(row, 6, r[6].strftime('%d-%b-%y'), cell_format)
